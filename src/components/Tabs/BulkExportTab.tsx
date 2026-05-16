@@ -53,6 +53,12 @@ export default function BulkExportTab() {
           format: job.format,
         })
       });
+      
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.indexOf('text/html') !== -1) {
+        throw new Error("Backend deployment missing (Netlify static host restriction). Deploy to Render.com.");
+      }
+
       const data = await res.json();
       if (res.ok && data.success) {
         return new Promise((resolve) => {

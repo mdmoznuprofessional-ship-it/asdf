@@ -26,6 +26,15 @@ export default function ExportTab() {
           format: targetFormat,
         })
       });
+      
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.indexOf('text/html') !== -1) {
+        // We received HTML instead of JSON. This happens on static hosts like Netlify.
+        setIsExporting(false);
+        alert("⚠️ Backend Server Missing!\n\nIt seems this app is hosted on Netlify or a static host which doesn't support Node.js/FFmpeg. Please run this app locally or deploy it to a full-stack platform like Render.com (using the provided render.yaml) to enable Video Export.");
+        return;
+      }
+
       const data = await res.json();
       if (res.ok && data.success) {
         // Poll for job status
