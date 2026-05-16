@@ -33,17 +33,17 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
 // Job state registry
-const jobs = new Map<string, { status: string, progress: number, fileUrl?: string, error?: string }>();
+const jobs = new Map<string, { status: string, progress: number, fileUrl?: string, error?: string, stage?: string, frame?: number, totalFrames?: number }>();
 
 // Basic API check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Premium SVG Render Engine Running' });
 });
 
-const encodeVideo = (framesDir: string, outputPath: string, format: string, fpsNum: number, useGpu: boolean): Promise<void> => {
+const encodeVideo = (framesDir: string, outputPath: string, format: string, fpsNum: number, useGpu: boolean, ext: string, onProgress?: (p: any) => void): Promise<void> => {
   return new Promise((resolve, reject) => {
       let command = ffmpeg()
-          .input(path.join(framesDir, 'frame-%05d.png'))
+          .input(path.join(framesDir, `frame-%05d.${ext}`))
           .inputFPS(fpsNum);
 
       const options = [];
@@ -52,12 +52,16 @@ const encodeVideo = (framesDir: string, outputPath: string, format: string, fpsN
       } else {
           options.push('-pix_fmt yuv420p');
           if (useGpu) {
-              options.push('-c:v h264_nvenc', '-preset p4', '-b:v 15M');
+              options.push('-c:v h264_amf', '-b:v 15M', '-usage ultrafast', '-quality speed', '-threads 0'); // AMD optimized
           } else {
-              options.push('-c:v libx264', '-preset ultrafast', '-crf 18');
+              options.push('-c:v libx264', '-preset ultrafast', '-crf 18', '-threads 0');
           }
       }
       
+      if (onProgress) {
+          command.on('progress', onProgress);
+      }
+
       command.outputOptions(options)
           .output(outputPath)
           .on('end', () => resolve())
@@ -78,7 +82,7 @@ const captureFrames = async (jobId: string, svg: string, background: string, tot
 <style>
 body, html { margin: 0; padding: 0; width: ${width}px; height: ${height}px; background: ${bgStyle}; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 #svg-container { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-#svg-container svg { max-width: 100%; max-height: 100%; object-fit: contain; }
+#svg-container svg { width: 100%; height: 100%; object-fit: contain; }
 * { animation-play-state: paused !important; }
 </style>
 </head>
@@ -115,23 +119,32 @@ ${svg}
       await page.setViewport({ width, height, deviceScaleFactor: 1 });
       await page.goto(`file://${htmlPath}`, { waitUntil: 'load', timeout: 60000 });
 
+      // Cache DOM queries once
+      await page.evaluate(() => {
+          (window as any).cachedSvgs = Array.from(document.querySelectorAll('svg')).filter(s => typeof (s as any).pauseAnimations === 'function');
+          (window as any).cachedAnims = Array.from(document.querySelectorAll('*')).filter(el => typeof el.getAnimations === 'function');
+      });
+
+      const isTransparent = background === 'Transparent';
+      const targetExt = isTransparent ? 'png' : 'jpeg';
+
       for(let i=0; i<totalFrames; i++) {
           const currentTime = i / fpsNum;
           await page.evaluate((currentTime) => {
               // 1. SMIL Animations
-              const svgs = document.querySelectorAll('svg');
-              svgs.forEach(s => {
-                  if(typeof (s as any).setCurrentTime === 'function') {
-                      (s as any).setCurrentTime(currentTime);
+              const svgs = (window as any).cachedSvgs || [];
+              svgs.forEach((s: any) => {
+                  if(typeof s.setCurrentTime === 'function') {
+                      s.setCurrentTime(currentTime);
                   }
               });
 
               // 2. CSS Animations / Web Animations API
-              const elements = document.querySelectorAll('*');
-              elements.forEach(el => {
+              const elements = (window as any).cachedAnims || [];
+              elements.forEach((el: any) => {
                   if(typeof el.getAnimations === 'function') {
                       const anims = el.getAnimations();
-                      anims.forEach(anim => {
+                      anims.forEach((anim: any) => {
                           anim.currentTime = currentTime * 1000;
                       });
                   }
@@ -141,10 +154,21 @@ ${svg}
               document.body.offsetTop;
           }, currentTime);
 
-          const framePath = path.join(framesDir, `frame-${String(i).padStart(5, '0')}.png`);
-          await page.screenshot({ path: framePath, type: 'png', omitBackground: background === 'Transparent' });
+          const framePath = path.join(framesDir, `frame-${String(i).padStart(5, '0')}.${targetExt}`);
+          await page.screenshot({ 
+              path: framePath, 
+              type: targetExt, 
+              quality: isTransparent ? undefined : 100,
+              omitBackground: isTransparent 
+          });
           
-          jobs.set(jobId, { status: 'Processing', progress: Math.round((i / totalFrames) * 80) });
+          jobs.set(jobId, { 
+            status: 'Processing', 
+            stage: 'Capturing Frames',
+            progress: Math.round((i / totalFrames) * 80),
+            frame: i + 1,
+            totalFrames
+          });
           
           // Yield to event loop
           await new Promise(r => setTimeout(r, 0));
@@ -174,7 +198,7 @@ app.post('/api/render', async (req, res) => {
     const totalFrames = durationNum * fpsNum;
     const jobId = Date.now() + '-' + Math.random().toString(36).substring(7);
     
-    jobs.set(jobId, { status: 'Processing', progress: 0 });
+    jobs.set(jobId, { status: 'Processing', stage: 'Preparing SVG', progress: 0, frame: 0, totalFrames });
     
     // Safe Background Processor
     (async () => {
@@ -205,20 +229,34 @@ app.post('/api/render', async (req, res) => {
 
         const outputExt = format === 'MOV (Alpha)' ? '.mov' : '.mp4';
         const outputPath = path.join(outputDir, `${jobId}${outputExt}`);
+        const frameExt = background === 'Transparent' ? 'png' : 'jpeg';
+
+        jobs.set(jobId, { status: 'Processing', stage: 'Encoding MP4', progress: 85, frame: totalFrames, totalFrames });
+
+        const onFfmpegProgress = (p: any) => {
+            if (p.frames) {
+                // Approximate encoding progress between 85% and 99%
+                const encodeProgress = Math.min(99, 85 + Math.round((p.frames / totalFrames) * 14));
+                jobs.set(jobId, { status: 'Processing', stage: 'Encoding MP4', progress: encodeProgress, frame: totalFrames, totalFrames });
+            } else {
+                // fallback just ping to prevent stuck timer
+                jobs.set(jobId, { status: 'Processing', stage: 'Encoding MP4', progress: 85, frame: totalFrames, totalFrames });
+            }
+        };
 
         // Encode Video (with GPU fallback to CPU)
         if (format === 'MP4') {
             try {
                 // Priority 1: GPU Rendering
-                await encodeVideo(framesDir, outputPath, format, fpsNum, true);
+                await encodeVideo(framesDir, outputPath, format, fpsNum, true, frameExt, onFfmpegProgress);
             } catch (err: any) {
                 console.log("GPU Render Failed, switching to CPU fallback...", err.message);
                 // Priority 2: CPU Fallback
-                await encodeVideo(framesDir, outputPath, format, fpsNum, false);
+                await encodeVideo(framesDir, outputPath, format, fpsNum, false, frameExt, onFfmpegProgress);
             }
         } else {
             // MOV ProRes processing
-            await encodeVideo(framesDir, outputPath, format, fpsNum, false);
+            await encodeVideo(framesDir, outputPath, format, fpsNum, false, frameExt, onFfmpegProgress);
         }
 
         jobs.set(jobId, { status: 'Completed', progress: 100, fileUrl: `/api/download/${jobId}${outputExt}` });

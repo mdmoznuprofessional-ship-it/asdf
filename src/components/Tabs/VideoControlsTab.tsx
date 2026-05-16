@@ -1,124 +1,93 @@
 import { useStore } from '../../store/useStore';
-import { Clock, MonitorPlay, Maximize, Palette } from 'lucide-react';
+import { Sliders, Monitor, Clock, Video, Palette } from 'lucide-react';
 
 export default function VideoControlsTab() {
-  const { duration, setDuration, fps, setFps, resolution, setResolution, background, setBackground } = useStore();
+  const { duration, setDuration, fps, setFps, resolution, setResolution, background, setBackground, format, setFormat } = useStore();
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex flex-col h-full bg-[#111114]">
       <div className="p-6 border-b border-white/5 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white">Video Controls</h2>
-          <p className="text-sm text-slate-400 mt-1">Configure duration, framerate, and output quality.</p>
-        </div>
+         <div>
+           <h2 className="text-sm font-bold uppercase tracking-widest text-white flex items-center gap-2">
+             <Sliders className="w-5 h-5 text-orange-500" /> Output Config
+           </h2>
+           <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider">Configure rendering engine parameters</p>
+         </div>
       </div>
 
-      <div className="flex-1 p-6 overflow-y-auto max-w-3xl">
-        <div className="space-y-8">
-          
-          {/* Duration */}
-          <section className="space-y-3">
-            <div className="flex items-center gap-2 text-slate-200 font-medium">
-              <Clock className="w-4 h-4 text-orange-500" />
-              <h3>Duration (Seconds)</h3>
-            </div>
-            <div className="flex items-center gap-4">
-              <input 
-                type="range" 
-                min="1" 
-                max="60" 
-                value={duration} 
-                onChange={(e) => setDuration(parseInt(e.target.value))}
-                className="flex-1 accent-orange-500"
-              />
-              <div className="w-24 relative">
-                <input 
-                  type="number" 
-                  min="1"
-                  max="60"
-                  value={duration}
-                  onChange={(e) => setDuration(parseInt(e.target.value) || 6)}
-                  className="w-full bg-[#141416]/40 border border-white/5 rounded px-3 py-2 text-white focus:outline-none focus:border-orange-500 text-sm font-mono"
-                />
-                <span className="absolute right-3 top-2.5 text-xs text-slate-500 uppercase">sec</span>
+      <div className="p-6 flex-1 overflow-y-auto custom-scrollbar space-y-8">
+         <div className="space-y-4">
+            <h3 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold flex items-center gap-2">
+              <Monitor className="w-4 h-4" /> Sequence Properties
+            </h3>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] text-slate-500 font-bold mb-2 block uppercase tracking-widest">Resolution</label>
+                <select 
+                  value={resolution} onChange={e => setResolution(e.target.value)} 
+                  className="w-full bg-[#1a1a1f] border border-white/10 rounded-lg px-4 py-3 text-sm font-medium text-white focus:outline-none focus:border-orange-500 hover:border-white/20 transition-colors shadow-inner"
+                >
+                  <option value="1080p">1080p Full HD</option>
+                  <option value="2K">1440p 2K</option>
+                  <option value="4K">2160p 4K UHD</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-500 font-bold mb-2 block uppercase tracking-widest">Frame Rate</label>
+                <select 
+                  value={fps} onChange={e => setFps(Number(e.target.value))} 
+                  className="w-full bg-[#1a1a1f] border border-white/10 rounded-lg px-4 py-3 text-sm font-medium text-white focus:outline-none focus:border-orange-500 hover:border-white/20 transition-colors shadow-inner"
+                >
+                  <option value={24}>24.00 (Film)</option>
+                  <option value={30}>30.00 (Standard)</option>
+                  <option value={60}>60.00 (Smooth)</option>
+                </select>
               </div>
             </div>
-          </section>
+         </div>
 
-          {/* FPS */}
-          <section className="space-y-3">
-            <div className="flex items-center gap-2 text-slate-200 font-medium">
-              <MonitorPlay className="w-4 h-4 text-orange-500" />
-              <h3>Framerate (FPS)</h3>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {[24, 30, 60].map((val) => (
-                <button
-                  key={val}
-                  onClick={() => setFps(val)}
-                  className={`py-3 rounded border text-sm font-medium transition-colors ${
-                    fps === val 
-                      ? 'bg-orange-500/10 border-orange-500/20 text-orange-400 font-mono uppercase' 
-                      : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/20 font-mono uppercase'
-                  }`}
-                >
-                  {val} fps
-                </button>
-              ))}
-            </div>
-          </section>
+         <div className="h-px bg-white/5 w-full"></div>
 
-          {/* Resolution */}
-          <section className="space-y-3">
-            <div className="flex items-center gap-2 text-slate-200 font-medium">
-              <Maximize className="w-4 h-4 text-orange-500" />
-              <h3>Resolution</h3>
+         <div className="space-y-4">
+            <h3 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold flex items-center gap-2">
+              <Clock className="w-4 h-4" /> Timeline
+            </h3>
+            
+            <div>
+              <label className="text-[10px] text-slate-500 font-bold mb-2 flex justify-between uppercase tracking-widest">
+                <span>Duration</span>
+                <span className="text-orange-400">{duration} Seconds / {duration * fps} Frames</span>
+              </label>
+              <input 
+                type="range" min="1" max="60"
+                value={duration} onChange={e => setDuration(Number(e.target.value))}
+                className="w-full accent-orange-500 h-2 bg-white/10 rounded-lg appearance-none cursor-pointer"
+              />
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              {['1080p', '2K', '4K'].map((res) => (
-                <button
-                  key={res}
-                  onClick={() => setResolution(res)}
-                  className={`py-3 rounded border text-sm font-medium transition-colors ${
-                    resolution === res 
-                      ? 'bg-orange-500/10 border-orange-500/20 text-orange-400 font-mono uppercase' 
-                      : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/20 font-mono uppercase'
-                  }`}
-                >
-                  {res}
-                </button>
-              ))}
-            </div>
-          </section>
+         </div>
 
-          {/* Background */}
-          <section className="space-y-3">
-            <div className="flex items-center gap-2 text-slate-200 font-medium">
-              <Palette className="w-4 h-4 text-orange-500" />
-              <h3>Background</h3>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {['Transparent', 'White', 'Black'].map((bg) => (
-                <button
-                  key={bg}
-                  onClick={() => setBackground(bg)}
-                  className={`py-3 rounded border flex items-center justify-center gap-2 text-sm font-medium transition-colors ${
-                    background === bg 
-                      ? 'bg-orange-500/10 border-orange-500/20 text-orange-400 font-mono uppercase' 
-                      : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/20 font-mono uppercase'
-                  }`}
-                >
-                  <div className={`w-4 h-4 rounded-full border border-white/20 ${
-                    bg === 'Transparent' ? 'bg-[url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjMWExYTFhIj48L3JlY3Q+CjxyZWN0IHg9IjQiIHk9IjQiIHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiMxYTFhMWEiPjwvcmVjdD4KPHJlY3QgeD0iNCIgd2lkdGg9IjQiIGhlaWdodD0iNCIgZmlsbD0iIzIyMiI+PC9yZWN0Pgo8cmVjdCB5PSI0IiB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjMjIyIj48L3JlY3Q+Cjwvc3ZnPg==")]' 
-                    : bg === 'White' ? 'bg-white' : 'bg-black'
-                  }`} />
-                  {bg}
-                </button>
-              ))}
-            </div>
-          </section>
+         <div className="h-px bg-white/5 w-full"></div>
 
-        </div>
+         <div className="space-y-4">
+            <h3 className="text-[11px] uppercase tracking-widest text-slate-400 font-bold flex items-center gap-2">
+              <Palette className="w-4 h-4" /> Composition
+            </h3>
+            
+            <div>
+              <label className="text-[10px] text-slate-500 font-bold mb-2 block uppercase tracking-widest">Backdrop</label>
+              <select 
+                value={background} onChange={e => setBackground(e.target.value)} 
+                className="w-full bg-[#1a1a1f] border border-white/10 rounded-lg px-4 py-3 text-sm font-medium text-white focus:outline-none focus:border-orange-500 hover:border-white/20 transition-colors shadow-inner"
+              >
+                <option value="Black">Solid Black (RGB 0,0,0)</option>
+                <option value="White">Solid White (RGB 255,255,255)</option>
+                <option value="Transparent">Alpha Transparent</option>
+              </select>
+            </div>
+         </div>
+
       </div>
     </div>
   );

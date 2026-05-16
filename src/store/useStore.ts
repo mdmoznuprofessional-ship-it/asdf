@@ -77,7 +77,7 @@ export const useStore = create<AppState>((set) => ({
   fps: 30,
   setFps: (fps) => set({ fps }),
 
-  resolution: '4K',
+  resolution: '1080p',
   setResolution: (res) => set({ resolution: res }),
 
   background: 'Black',
